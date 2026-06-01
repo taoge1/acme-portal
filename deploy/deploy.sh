@@ -83,9 +83,9 @@ RestartSec=5
 User=root
 Environment=SMTP_HOST=smtp.qq.com
 Environment=SMTP_PORT=465
-Environment=SMTP_USER=xiexianshen@foxmail.com
-Environment=SMTP_PASS=zpkvtpsovhbqdhdh
-Environment=SMTP_FROM=xiexianshen@foxmail.com
+Environment=SMTP_USER=your_smtp@example.com
+Environment=SMTP_PASS=your_smtp_password
+Environment=SMTP_FROM=your_smtp@example.com
 
 [Install]
 WantedBy=multi-user.target
