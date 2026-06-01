@@ -1,8 +1,18 @@
 # ACME SSL 证书管理门户
 
-> 🚀 基于 Let's Encrypt DNS-01 验证的免费 SSL 证书自动签发管理平台
+> 🚀 **证书免费签发** · 基于 Let's Encrypt DNS-01 验证的免费 SSL 证书自动签发管理平台
 
-一键签发、多用户管理、额度控制、美观界面。支持泛域名、批量签发、7 天到期提醒。
+🔓 **免费签发 Let's Encrypt SSL 证书** · 多用户管理 · 额度控制 · 泛域名 · 批量签发 · 到期提醒
+
+## ⬇️ 直接下载
+
+| 平台 | 文件 | 下载 |
+|------|------|------|
+| 🪟 Windows | `ACME证书管理.exe`（18MB） | [⬇️ 下载](releases/ACME证书管理.exe) |
+| 🐧 Linux | `acme-portal-linux`（17MB） | [⬇️ 下载](releases/acme-portal-linux) |
+| 🐍 源码 | 需 Python 3.6+ | [从源码运行](#开发者从源码运行) |
+
+> 下载后双击/运行即可，浏览器打开 `http://localhost:10501` 使用
 
 ![Python](https://img.shields.io/badge/Python-3.6%2B-blue)
 ![Flask](https://img.shields.io/badge/Flask-2.0-green)
@@ -43,6 +53,10 @@ chmod +x acme-portal
 | `admin123` | 初始密码，登录后建议修改 |
 
 > ⚠️ 首次启动会自动创建管理员账号。可以通过环境变量 `ADMIN_EMAIL` 和 `ADMIN_PASSWORD` 自定义。
+
+---
+
+## 🔐 证书免费签发
 
 ---
 
