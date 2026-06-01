@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSL 证书签发系统</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a; color: #e2e8f0; min-height: 100vh;
+  display: flex; justify-content: center; align-items: center; padding: 20px;
+}
+.container { width: 100%; max-width: 680px; }
+h1 { text-align: center; font-size: 24px; margin-bottom: 8px; color: #38bdf8; }
+.subtitle { text-align: center; color: #94a3b8; margin-bottom: 32px; font-size: 14px; }
+
+.card {
+  background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+  padding: 24px; margin-bottom: 16px;
+}
+
+.input-group { margin-bottom: 16px; }
+.input-group label { display: block; margin-bottom: 6px; color: #94a3b8; font-size: 13px; font-weight: 500; }
+.input-group input {
+  width: 100%; padding: 12px 16px; font-size: 15px;
+  background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+  color: #e2e8f0; outline: none; transition: border 0.2s;
+}
+.input-group input:focus { border-color: #38bdf8; }
+.input-row { display: flex; gap: 12px; }
+.input-row .input-group { flex: 1; }
+
+.btn {
+  display: inline-block; padding: 10px 20px; font-size: 14px; font-weight: 600;
+  border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+}
+.btn-block { display: block; width: 100%; padding: 14px; font-size: 16px; }
+.btn-primary { background: #0284c7; color: white; }
+.btn-primary:hover { background: #0369a1; }
+.btn-primary:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+.btn-success { background: #16a34a; color: white; }
+.btn-success:hover { background: #15803d; }
+.btn-copy { background: #475569; color: white; padding: 6px 14px; font-size: 12px; border-radius: 6px; }
+.btn-copy:hover { background: #64748b; }
+.btn-download { background: #7c3aed; color: white; padding: 6px 14px; font-size: 12px; border-radius: 6px; margin-left: 6px; }
+.btn-download:hover { background: #6d28d9; }
+.btn-email { background: #0d9488; color: white; }
+.btn-email:hover { background: #0f766e; }
+
+.step { display: none; }
+.step.active { display: block; }
+
+.result-box {
+  background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+  padding: 14px; margin-top: 10px; word-break: break-all;
+}
+.result-box .label { color: #94a3b8; font-size: 12px; margin-bottom: 4px; }
+.result-box .value {
+  font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px;
+  color: #38bdf8; padding: 8px; background: #020617; border-radius: 6px;
+  overflow-x: auto; white-space: pre-wrap; position: relative;
+}
+.copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+
+.hint {
+  background: #172554; border: 1px solid #1e40af; border-radius: 8px;
+  padding: 12px 16px; margin-top: 14px; color: #93c5fd;
+  font-size: 13px; line-height: 1.6;
+}
+.error-box {
+  background: #450a0a; border: 1px solid #991b1b; border-radius: 8px;
+  padding: 12px 16px; margin-top: 16px; color: #fca5a5; font-size: 13px;
+}
+.success-box {
+  background: #052e16; border: 1px solid #166534; border-radius: 8px;
+  padding: 12px 16px; margin-top: 12px; color: #4ade80; font-size: 13px;
+}
+.spinner {
+  display: inline-block; width: 16px; height: 16px; border: 2px solid #334155;
+  border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.cert-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.cert-tab {
+  padding: 8px 16px; font-size: 13px; border: 1px solid #334155;
+  background: #0f172a; color: #94a3b8; border-radius: 6px 6px 0 0;
+  cursor: pointer;
+}
+.cert-tab.active { background: #1e293b; color: #38bdf8; border-bottom: 2px solid #38bdf8; }
+
+.btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔒 SSL 证书签发系统</h1>
+  <p class="subtitle">Let's Encrypt DNS-01 · 支持 Hichina / 阿里云 DNS</p>
+
+  <!-- 步骤1: 输入域名 + 邮箱 -->
+  <div id="step1" class="card step active">
+    <div class="input-group">
+      <label>域名（支持通配符 *.example.com）</label>
+      <input type="text" id="domain" placeholder="例如：zhensgshu.byfwwwg.cn">
+    </div>
+    <div class="input-group">
+      <label>接收证书的邮箱（可选，签发后可发送）</label>
+      <input type="email" id="email" placeholder="例如：admin@byfwwwg.cn">
+    </div>
+    <button class="btn btn-primary btn-block" id="btnGenerate" onclick="generateChallenge()">
+      生成 DNS 验证记录
+    </button>
+  </div>
+
+  <!-- 步骤2: 显示 TXT 记录 -->
+  <div id="step2" class="card step">
+    <h3 style="margin-bottom:12px;font-size:16px;">📋 请到阿里云 DNS 控制台添加以下记录</h3>
+
+    <div class="result-box">
+      <div class="label">记录类型</div>
+      <div class="value">TXT</div>
+    </div>
+
+    <div class="result-box">
+      <div class="label">主机记录 <span style="color:#6b7280;">（填这个，不含域名后缀）</span></div>
+      <div class="value" id="hostRecord"></div>
+      <div class="copy-row">
+        <button class="btn-copy" onclick="copyText('hostRecord')">📋 复制</button>
+      </div>
+    </div>
+
+    <div class="result-box">
+      <div class="label">记录值</div>
+      <div class="value" id="txtValue"></div>
+      <div class="copy-row">
+        <button class="btn-copy" onclick="copyText('txtValue')">📋 复制</button>
+      </div>
+    </div>
+
+    <div class="result-box">
+      <div class="label">TTL</div>
+      <div class="value">600</div>
+    </div>
+
+    <button class="btn btn-success btn-block" style="margin-top:16px;" onclick="verifyAndIssue()">
+      ✅ 我已添加，开始验证签发
+    </button>
+    <div id="verifyStatus" style="margin-top:12px;text-align:center;"></div>
+  </div>
+
+  <!-- 步骤3: 证书结果 -->
+  <div id="step3" class="card step">
+    <h3 style="font-size:16px;color:#4ade80;">🎉 证书签发成功！</h3>
+    <p style="color:#94a3b8;margin:8px 0 16px;font-size:13px;" id="certDomain"></p>
+
+    <div class="cert-tabs">
+      <button class="cert-tab active" onclick="showCertTab('cert')">证书（公钥）</button>
+      <button class="cert-tab" onclick="showCertTab('key')">私钥</button>
+    </div>
+
+    <div id="tab-cert" class="result-box">
+      <div class="value" id="certPem" style="max-height:300px;overflow-y:auto;"></div>
+      <div class="copy-row">
+        <button class="btn-copy" onclick="copyText('certPem')">📋 复制</button>
+        <button class="btn-download" onclick="downloadFile('cert')">⬇ 下载</button>
+      </div>
+    </div>
+
+    <div id="tab-key" class="result-box" style="display:none;">
+      <div class="value" id="keyPem" style="max-height:300px;overflow-y:auto;"></div>
+      <div class="copy-row">
+        <button class="btn-copy" onclick="copyText('keyPem')">📋 复制</button>
+        <button class="btn-download" onclick="downloadFile('key')">⬇ 下载</button>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-download btn-block" onclick="downloadFile('all')">📦 一键下载证书+私钥</button>
+      <button class="btn btn-email btn-block" id="btnEmail" onclick="sendEmail()">📧 发送到邮箱</button>
+    </div>
+    <div id="emailStatus"></div>
+
+    <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="resetAll()">
+      🔄 签发新域名
+    </button>
+  </div>
+</div>
+
+<script>
+let currentDomain = '';
+let currentEmail = '';
+
+function $(id) { return document.getElementById(id); }
+
+function setStep(n) {
+  for (let i = 1; i <= 3; i++) $('step' + i).classList.toggle('active', i === n);
+}
+
+function showCertTab(tab) {
+  $('tab-cert').style.display = tab === 'cert' ? 'block' : 'none';
+  $('tab-key').style.display = tab === 'key' ? 'block' : 'none';
+  document.querySelectorAll('.cert-tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && tab === 'cert') || (i === 1 && tab === 'key'));
+  });
+}
+
+async function generateChallenge() {
+  const domain = $('domain').value.trim();
+  if (!domain) { alert('请输入域名'); return; }
+  currentDomain = domain;
+  currentEmail = $('email').value.trim();
+
+  const btn = $('btnGenerate');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 正在连接 Let\'s Encrypt...';
+
+  try {
+    const resp = await fetch('api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain })
+    });
+    const data = await resp.json();
+
+    if (data.error) {
+      alert('错误: ' + data.error);
+      btn.disabled = false;
+      btn.textContent = '重试';
+      return;
+    }
+
+    // 显示 TXT 记录信息
+    $('hostRecord').textContent = data.host_record || data.txt_name;
+    $('txtValue').textContent = data.txt_value;
+
+    setStep(2);
+  } catch (e) {
+    alert('请求失败: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '重试';
+  }
+}
+
+async function verifyAndIssue() {
+  $('verifyStatus').innerHTML = '<span class="spinner"></span> 正在触发验证...';
+
+  try {
+    const resp = await fetch('api/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: currentDomain })
+    });
+    const data = await resp.json();
+
+    if (data.status === 'completed') { showCertificate(data); return; }
+    if (data.error) { $('verifyStatus').innerHTML = '<div class="error-box">' + data.error + '</div>'; return; }
+    pollStatus();
+  } catch (e) { alert('请求失败: ' + e.message); }
+}
+
+async function pollStatus() {
+  let attempts = 0;
+  while (attempts < 60) {
+    await new Promise(r => setTimeout(r, 5000));
+    attempts++;
+    $('verifyStatus').innerHTML = '<span class="spinner"></span> 等待验证中... (' + (attempts * 5) + 's)';
+
+    try {
+      const resp = await fetch('api/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: currentDomain })
+      });
+      const data = await resp.json();
+
+      if (data.status === 'completed') { showCertificate(data); return; }
+      if (data.status === 'invalid') { $('verifyStatus').innerHTML = '<div class="error-box">验证失败: ' + (data.error || '未知错误') + '</div>'; return; }
+      if (data.status === 'error') { $('verifyStatus').innerHTML = '<div class="error-box">错误: ' + (data.error || '服务异常') + '</div>'; return; }
+      if (data.status === 'timeout') { $('verifyStatus').innerHTML = '<div class="error-box">验证超时，请确认 DNS 记录已正确添加</div>'; return; }
+    } catch (e) {}
+  }
+  $('verifyStatus').innerHTML = '<div class="error-box">验证超时（5分钟），请确认 DNS 后重试</div>';
+}
+
+function showCertificate(data) {
+  $('certDomain').textContent = '域名: ' + data.domain;
+  $('certPem').textContent = data.certificate || '未获取到证书';
+  $('keyPem').textContent = data.private_key || '未获取到私钥';
+  $('verifyStatus').innerHTML = '';
+  setStep(3);
+}
+
+function copyText(id) {
+  const text = $(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const evt = window.event;
+    if (evt && evt.target) {
+      evt.target.textContent = '✅ 已复制';
+      const orig = evt.target.textContent;
+      setTimeout(() => { evt.target.textContent = '📋 复制'; }, 2000);
+    }
+  });
+}
+
+function downloadFile(type) {
+  const url = 'api/download/' + encodeURIComponent(currentDomain) + '/' + type;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function sendEmail() {
+  if (!currentEmail) {
+    currentEmail = prompt('请输入接收证书的邮箱地址：');
+    if (!currentEmail) return;
+  }
+
+  const btn = $('btnEmail');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  $('emailStatus').innerHTML = '';
+
+  try {
+    const resp = await fetch('api/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: currentDomain, email: currentEmail })
+    });
+    const data = await resp.json();
+
+    if (data.status === 'sent') {
+      $('emailStatus').innerHTML = '<div class="success-box">✅ ' + data.message + '</div>';
+    } else {
+      $('emailStatus').innerHTML = '<div class="error-box">' + (data.error || '发送失败') + '</div>';
+    }
+  } catch (e) {
+    $('emailStatus').innerHTML = '<div class="error-box">请求失败: ' + e.message + '</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = '📧 发送到邮箱';
+}
+
+function resetAll() {
+  $('domain').value = '';
+  $('email').value = '';
+  currentDomain = '';
+  currentEmail = '';
+  setStep(1);
+}
+</script>
+</body>
+</html>
