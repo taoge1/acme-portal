@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSL 证书管理</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e; color: #e8e8f0; min-height: 100vh;
+}
+/* ═══ 布局 ═══ */
+.app { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 240px; background: rgba(22, 22, 40, 0.94); border-right: 1px solid rgba(180, 200, 230, 0.1);
+  padding: 24px 16px; display: flex; flex-direction: column; flex-shrink: 0;
+}
+.main { flex:1; padding: 32px; overflow-y: auto; }
+.logo { font-size: 18px; font-weight: 700; color: #60cfff; margin-bottom: 32px; display: flex; align-items: center; gap: 8px; }
+.nav-item { color: #8899bb;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 8px; color: #94a3b8; cursor: pointer; transition: all .15s;
+  font-size: 14px; margin-bottom: 4px;
+}
+.nav-item:hover { background: rgba(148, 163, 184, 0.1); color: #e2e8f0; }
+.nav-item.active { background: rgba(2, 132, 199, 0.8); color: white; }
+.sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.1); }
+.user-info { font-size: 13px; color: #b0c0d0; margin-bottom: 8px; }
+.user-info strong { color: #e2e8f0; }
+.btn-logout {
+  width: 100%; padding: 8px; font-size: 13px; background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.12); border-radius: 6px; color: #94a3b8; cursor: pointer; transition: all .15s;
+}
+.btn-logout:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+/* ═══ 页面 ═══ */
+.page { display: none; }
+.page.active { display: block; }
+.page-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.page-subtitle { color: #8899aa; font-size: 14px; margin-bottom: 24px; }
+/* ═══ 统计卡片 ═══ */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; margin-bottom: 24px; }
+.stat-card {
+  background: rgba(35, 45, 70, 0.6); border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 10px;
+  padding: 16px; text-align: center;
+}
+.stat-card .num { font-size: 28px; font-weight: 700; }
+.stat-card .label { font-size: 12px; color: #64748b; margin-top: 4px; }
+.stat-card.total .num { color: #38bdf8; }
+.stat-card.valid .num { color: #22c55e; }
+.stat-card.warning .num { color: #f59e0b; }
+.stat-card.danger .num { color: #ef4444; }
+/* ═══ 表格/列表 ═══ */
+.card {
+  background: rgba(35, 45, 70, 0.5); border: 1px solid rgba(180, 200, 230, 0.08); border-radius: 10px;
+  padding: 20px; margin-bottom: 16px;
+}
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.card-title { font-size: 16px; font-weight: 600; }
+.cert-grid { display: grid; gap: 12px; }
+.cert-item {
+  background: rgba(30, 40, 62, 0.55); border: 1px solid rgba(180, 200, 230, 0.06); border-radius: 8px;
+  padding: 16px; display: flex; align-items: center; gap: 16px;
+  transition: all .15s; position: relative;
+}
+.cert-item:hover { border-color: rgba(148, 163, 184, 0.2); }
+.cert-item.expiring-soon { border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); }
+.cert-item.expiring-soon::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: #f59e0b; border-radius: 3px 0 0 3px;
+}
+.cert-item.expired { border-color: rgba(220, 38, 38, 0.4); background: rgba(220, 38, 38, 0.06); opacity: .7; }
+.cert-item.expired::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: #dc2626; border-radius: 3px 0 0 3px;
+}
+.cert-icon { font-size: 28px; flex-shrink: 0; }
+.cert-info { flex:1; min-width: 0; }
+.cert-domain { font-size: 15px; font-weight: 600; color: #e2e8f0; word-break: break-all; }
+.cert-meta { font-size: 12px; color: #64748b; margin-top: 4px; display: flex; gap: 16px; flex-wrap: wrap; }
+.cert-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+}
+.status-valid { background: rgba(74, 222, 128, 0.12); color: #4ade80; }
+.status-expiring_soon { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
+.status-expired { background: rgba(252, 165, 165, 0.1); color: #fca5a5; }
+.status-pending { background: rgba(147, 197, 253, 0.1); color: #93c5fd; }
+.status-invalid { background: rgba(252, 165, 165, 0.08); color: #fca5a5; }
+.cert-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* ═══ 按钮 ═══ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+  font-size: 13px; font-weight: 500; border: none; border-radius: 6px;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.btn-primary { background: rgba(2, 132, 199, 0.85); color: white; }
+.btn-primary:hover { background: rgba(3, 105, 161, 0.95); }
+.btn-success { background: rgba(22, 163, 74, 0.85); color: white; }
+.btn-success:hover { background: rgba(21, 128, 61, 0.95); }
+.btn-danger { background: rgba(220, 38, 38, 0.85); color: white; }
+.btn-danger:hover { background: rgba(185, 28, 28, 0.95); }
+.btn-ghost { background: transparent; border: 1px solid rgba(148, 163, 184, 0.15); color: #94a3b8; }
+.btn-ghost:hover { background: rgba(148, 163, 184, 0.15); color: #e2e8f0; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-block { display: block; width: 100%; justify-content: center; padding: 12px; font-size: 15px; }
+/* ═══ 登录页 ═══ */
+.auth-page {
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh; padding: 20px;
+}
+.auth-card {
+  background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(148, 163, 184, 0.12); border-radius: 12px;
+  padding: 32px; width: 100%; max-width: 400px; will-change: transform;
+}
+.auth-card .logo { justify-content: center; margin-bottom: 24px; font-size: 20px; }
+.input-group { margin-bottom: 14px; }
+.input-group label { display: block; margin-bottom: 5px; color: #94a3b8; font-size: 13px; font-weight: 500; }
+.input-group input {
+  width: 100%; padding: 10px 14px; font-size: 14px;
+  background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(148, 163, 184, 0.12); border-radius: 7px;
+  color: #e2e8f0; outline: none; transition: border .2s;
+}
+.input-group input:focus { border-color: rgba(56, 189, 248, 0.5); }
+.input-row { display: flex; gap: 8px; }
+.input-row .input-group { flex:1; }
+.input-row .btn { flex-shrink: 0; padding: 10px 16px; }
+.auth-error { color: #fca5a5; font-size: 13px; margin-bottom: 12px; }
+.auth-hint { color: #64748b; font-size: 13px; margin-top: 16px; text-align: center; }
+/* ═══ Modal ═══ */
+.modal-overlay {
+  display: none; position: fixed; inset:0; background: rgba(0,0,0,.6);
+  z-index: 100; justify-content: center; align-items: center; padding: 20px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(148, 163, 184, 0.12); border-radius: 12px;
+  padding: 24px; width: 100%; max-width: 600px; max-height: 80vh; overflow-y: auto; will-change: transform;
+}
+.modal-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.modal-close {
+  float: right; background: none; border: none; color: #64748b;
+  font-size: 20px; cursor: pointer;
+}
+.modal-close:hover { color: #e2e8f0; }
+/* ═══ 证书详情 ═══ */
+.detail-label { color: #64748b; font-size: 12px; margin-bottom: 4px; }
+.detail-value {
+  font-family: 'SF Mono','Cascadia Code',monospace; font-size: 13px;
+  background: #0f172a; padding: 8px 12px; border-radius: 6px;
+  color: #38bdf8; word-break: break-all; margin-bottom: 12px; position: relative;
+}
+.detail-value .copy-btn {
+  position: absolute; right: 6px; top: 6px; background: #334155;
+  border: none; color: #94a3b8; padding: 3px 8px; border-radius: 4px;
+  font-size: 11px; cursor: pointer;
+}
+.detail-value .copy-btn:hover { background: rgba(148, 163, 184, 0.2); color: #e2e8f0; }
+/* ═══ 签发流程（内嵌） ═══ */
+.acme-flow { margin-top: 16px; }
+.acme-step { display: none; }
+.acme-step.active { display: block; }
+.spinner {
+  display: inline-block; width: 16px; height: 16px; border: 2px solid #334155;
+  border-top-color: #38bdf8; border-radius: 50%; animation: spin .8s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.copy-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tab {
+  padding: 7px 14px; font-size: 13px; border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.4); color: #64748b; border-radius: 6px 6px 0 0; cursor: pointer;
+}
+.tab.active { background: rgba(30, 41, 59, 0.5); color: #38bdf8; border-bottom: 2px solid #38bdf8; }
+.empty-state { text-align: center; padding: 40px; color: #64748b; }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state .desc { font-size: 14px; margin-bottom: 16px; }
+/* ═══ 响应式 ═══ */
+@media(max-width:768px){
+  .sidebar { width: 64px; padding: 16px 8px; }
+  .sidebar .logo span, .sidebar .nav-item span, .sidebar .user-info, .sidebar .btn-logout { display: none; }
+  .sidebar .nav-item { color: #8899bb; justify-content: center; padding: 10px; font-size: 20px; }
+  .sidebar .logo { justify-content: center; }
+  .main { padding: 16px; }
+  .cert-item { flex-wrap: wrap; }
+  .cert-actions { width: 100%; margin-top: 8px; justify-content: flex-end; }
+}
+/* ═══ 背景粒子 ═══ */
+#bgCanvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; will-change: transform; }
+.auth-page, .app { position:relative; z-index:1; }
+</style>
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+<!-- ═══ 登录页 ═══ -->
+<div id="authPage" class="auth-page" style="display:none;">
+  <div class="auth-card">
+    <div class="logo">🔒 <span>SSL 证书管理</span></div>
+    <div id="authError" class="auth-error"></div>
+    <div class="input-group">
+      <label>邮箱</label>
+      <input type="email" id="authEmail" placeholder="your@email.com">
+    </div>
+    <!-- 验证码模式 -->
+    <div id="codeMode" style="display:none;">
+      <div class="input-row">
+        <div class="input-group">
+          <label>验证码（不区分大小写）</label>
+          <input type="text" id="authCode" placeholder="6位" maxlength="6" autocomplete="off">
+        </div>
+        <button class="btn btn-ghost" id="btnSendCode" onclick="sendCode()" style="margin-top:22px;">发送</button>
+      </div>
+    </div>
+    <!-- 密码模式 -->
+    <div id="pwdMode">
+      <div class="input-group">
+        <label>密码</label>
+        <input type="password" id="authPassword" placeholder="请输入密码">
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="doLogin()" id="btnLogin">登录</button>
+    <div class="auth-hint">
+      <a style="color:#38bdf8;cursor:pointer;text-decoration:none;" id="toggleLink" onclick="toggleLoginMode()">📧 使用验证码登录</a>
+      &nbsp;|&nbsp; 首次登录自动注册
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 主应用 ═══ -->
+<div id="app" class="app" style="display:none;">
+  <div class="sidebar">
+    <div class="logo">🔒 <span>SSL 管理</span></div>
+    <div class="nav-item active" onclick="switchPage('dashboard')" id="nav-dashboard">
+      📊 <span>证书面板</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('newcert')" id="nav-newcert">
+      ➕ <span>签发新证书</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('settings')" id="nav-settings">
+      ⚙️ <span>账号设置</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('admin')" id="nav-admin" style="display:none;">
+      👑 <span>用户管理</span>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-info" id="userInfo"></div>
+      <button class="btn-logout" onclick="logout()">🚪 退出登录</button>
+    </div>
+  </div>
+  <div class="main">
+    <!-- 证书面板 -->
+    <div id="page-dashboard" class="page active">
+      <h2 class="page-title">📊 证书面板</h2>
+      <p class="page-subtitle">所有已签发证书的状态概览</p>
+      <div class="stats-row" id="statsRow"></div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">证书列表</span>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="certSearch" placeholder="🔍 搜索域名..." oninput="filterCerts()" style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:6px 12px;color:#e2e8f0;font-size:13px;width:200px;">
+            <span id="filterCount" style="color:#64748b;font-size:12px;align-self:center;"></span>
+            <button class="btn btn-primary btn-sm" onclick="switchPage('newcert')">➕ 签发新证书</button>
+          </div>
+        </div>
+        <div class="cert-grid" id="certList"></div>
+        <div class="empty-state" id="emptyCerts" style="display:none;">
+          <div class="icon">🔐</div>
+          <div class="desc">还没有签发过证书</div>
+          <button class="btn btn-primary" onclick="switchPage('newcert')">签发第一张证书</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 签发新证书 -->
+    <div id="page-newcert" class="page">
+      <h2 class="page-title">➕ 签发新证书</h2>
+      <p class="page-subtitle">为域名签发 Let's Encrypt SSL 证书</p>
+      <div class="card">
+        <div class="acme-flow" id="acmeFlow">
+          <!-- 步骤1: 输入域名 -->
+          <div class="acme-step active" id="acmeStep1">
+            <div class="input-group">
+              <label>域名（每行一个，支持通配符 *.example.com）</label>
+              <textarea id="acmeDomain" placeholder="example.com&#10;www.example.com&#10;*.example.com" rows="3" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:7px;color:#e2e8f0;padding:10px 14px;font-size:14px;resize:vertical;"></textarea>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="acmeGenerate()" id="btnGenerate">
+              生成 DNS 验证记录
+            </button>
+            <div id="acmeError" class="auth-error" style="display:none;"></div>
+          </div>
+          <!-- 步骤2: TXT 记录 -->
+          <div class="acme-step" id="acmeStep2">
+            <h3 style="margin-bottom:12px;font-size:15px;">📋 请在 DNS 控制台添加以下 TXT 记录</h3>
+            <div class="detail-label">记录类型</div>
+            <div class="detail-value">TXT</div>
+            <div class="detail-label">主机记录 <span style="color:#6b7280;">（不含域名后缀）</span></div>
+            <div class="detail-value" id="acmeHostRecord">
+              <button class="copy-btn" onclick="copyText(this)">📋 复制</button>
+            </div>
+            <div class="detail-label">记录值</div>
+            <div class="detail-value" id="acmeTxtValue">
+              <button class="copy-btn" onclick="copyText(this)">📋 复制</button>
+            </div>
+            <div class="detail-label">TTL</div>
+            <div class="detail-value">600</div>
+            <button class="btn btn-success btn-block" onclick="acmeVerify()" id="btnVerify" style="margin-top:16px;">
+              ✅ 我已添加，开始验证
+            </button>
+            <div id="acmeVerifyStatus" style="margin-top:12px;"></div>
+          </div>
+          <!-- 步骤3: 成功 -->
+          <div class="acme-step" id="acmeStep3">
+            <h3 style="font-size:16px;color:#4ade80;">🎉 证书签发成功！</h3>
+            <p style="color:#94a3b8;margin:8px 0 16px;font-size:13px;" id="acmeDomainDisplay"></p>
+            <div class="tabs">
+              <button class="tab active" onclick="switchCertTab('cert')">证书</button>
+              <button class="tab" onclick="switchCertTab('key')">私钥</button>
+            </div>
+            <div id="tab-cert">
+              <div class="detail-value" id="acmeCertPem" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;">
+                <button class="copy-btn" onclick="copyText(this)">📋 复制</button>
+              </div>
+            </div>
+            <div id="tab-key" style="display:none;">
+              <div class="detail-value" id="acmeKeyPem" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;">
+                <button class="copy-btn" onclick="copyText(this)">📋 复制</button>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <button class="btn" style="background:rgba(124,58,237,0.7);color:white;backdrop-filter:blur(6px);" onclick="acmeDownload('all')">📦 下载全部</button>
+              <button class="btn btn-ghost" onclick="acmeSendEmail()">📧 发送到邮箱</button>
+            </div>
+            <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="switchPage('dashboard')">
+              📊 查看证书面板
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 账号设置 -->
+    <div id="page-settings" class="page">
+      <h2 class="page-title">⚙️ 账号设置</h2>
+      <p class="page-subtitle">管理登录密码</p>
+      <div class="card" style="max-width:500px;">
+        <div id="pwdSettingsError" class="auth-error"></div>
+        <div class="input-group">
+          <label>新密码（至少6位）</label>
+          <input type="password" id="newPassword" placeholder="输入新密码">
+        </div>
+        <div class="input-group">
+          <label>确认密码</label>
+          <input type="password" id="confirmPassword" placeholder="再次输入密码">
+        </div>
+        <button class="btn btn-primary btn-block" onclick="setPassword()">保存密码</button>
+        <div id="pwdSettingsOk" style="color:#4ade80;margin-top:8px;display:none;">✅ 密码设置成功</div>
+        <p style="color:#64748b;font-size:12px;margin-top:16px;">设置后，可使用邮箱+密码直接登录，无需验证码。</p>
+      </div>
+    </div>
+
+    <!-- 管理员面板 -->
+    <div id="page-admin" class="page">
+      <h2 class="page-title">👑 用户管理</h2>
+      <p class="page-subtitle">管理用户证书额度</p>
+      <!-- 添加用户 -->
+      <div class="card" style="max-width:500px;">
+        <div class="card-title" style="margin-bottom:12px;">➕ 添加新用户</div>
+        <div id="createUserMsg" class="auth-error"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="email" id="newUserEmail" placeholder="用户邮箱" style="flex:1;min-width:160px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:13px;">
+          <input type="text" id="newUserPassword" placeholder="登录密码(至少6位)" style="flex:1;min-width:160px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:13px;">
+          <input type="number" id="newUserQuota" placeholder="额度" value="5" min="-1" style="width:70px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px;color:#e2e8f0;font-size:13px;text-align:center;">
+          <button class="btn btn-primary btn-sm" onclick="createUser()">创建</button>
+        </div>
+      </div>
+      <div class="card" id="adminUsersTable">
+        <div class="empty-state"><div class="spinner"></div> 加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 证书详情 Modal ═══ -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modalTitle">证书详情</div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="emailModal">
+  <div class="modal" style="max-width:400px;">
+    <button class="modal-close" onclick="closeEmailModal()">✕</button>
+    <div class="modal-title">发送到邮箱</div>
+    <div class="input-group">
+      <label>邮箱地址</label>
+      <input type="email" id="emailInput" placeholder="your@email.com">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="doSendEmail()">发送</button>
+    <div id="emailModalStatus" class="auth-error" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- ═══ DNS TXT 记录弹窗 ═══ -->
+<div class="modal-overlay" id="dnsModal">
+  <div class="modal" style="max-width:480px;">
+    <button class="modal-close" onclick="closeDnsModal()">✕</button>
+    <div class="modal-title">📋 请添加 DNS TXT 记录</div>
+    <div id="dnsModalDomain" style="color:#38bdf8;font-size:15px;font-weight:600;margin-bottom:12px;"></div>
+    <div class="detail-label">记录类型</div>
+    <div class="detail-value" style="color:#f59e0b;font-weight:600;">TXT</div>
+    <div class="detail-label">主机记录</div>
+    <div class="detail-value" style="position:relative;" id="dnsModalHost"><span class="dns-val"></span><button class="copy-btn" onclick="copyText(this)">📋</button></div>
+    <div class="detail-label">记录值</div>
+    <div class="detail-value" style="position:relative;" id="dnsModalValue"><span class="dns-val"></span><button class="copy-btn" onclick="copyText(this)">📋</button></div>
+    <p style="color:#94a3b8;font-size:12px;margin-top:12px;">添加完成后等待 DNS 生效（通常 1-2 分钟），再点击验证</p>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn btn-ghost" style="flex:1;" onclick="closeDnsModal()">取消</button>
+      <button class="btn btn-success" style="flex:1;" id="btnDnsConfirm">✅ 开始验证</button>
+    </div>
+    <div id="dnsModalStatus" style="margin-top:8px;font-size:13px;"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════ 下雨动画 ════════════════════════
+(function(){
+  const c = document.getElementById('bgCanvas');
+  const ctx = c.getContext('2d');
+  let w, h, drops = [], splashes = [];
+  function resize() { w = c.width = window.innerWidth; h = c.height = window.innerHeight; }
+  window.addEventListener('resize', resize); resize();
+  for (let i = 0; i < 350; i++) {
+    drops.push({ x: Math.random() * w, y: Math.random() * h, len: Math.random() * 30 + 12, spd: Math.random() * 14 + 10, thick: Math.random() * 1.4 + 0.4, op: Math.random() * 0.5 + 0.2 });
+  }
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    // 底部雾气
+    const mistGrad = ctx.createLinearGradient(0, h - 130, 0, h);
+    mistGrad.addColorStop(0, 'rgba(130,160,200,0)');
+    mistGrad.addColorStop(0.5, 'rgba(130,160,200,0.04)');
+    mistGrad.addColorStop(1, 'rgba(140,170,210,0.08)');
+    ctx.fillStyle = mistGrad;
+    ctx.fillRect(0, h - 130, w, 130);
+    // 雨滴
+    for (let d of drops) {
+      d.y += d.spd; d.x -= d.spd * 0.12;
+      if (d.y > h + 30) { d.y = -30; d.x = Math.random() * w * 1.3; }
+      if (d.x < -20) d.x = w + 20;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x + d.spd * 0.12, d.y - d.len);
+      ctx.strokeStyle = 'rgba(200,225,250,' + d.op + ')';
+      ctx.lineWidth = d.thick;
+      ctx.stroke();
+    }
+    // 水花
+    splashes = splashes.filter(s => s.life > 0);
+    for (let s of splashes) {
+      for (let p of s.parts) {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.12;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (s.life / 25), 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(200,225,250,' + (s.life / 45) + ')';
+        ctx.fill();
+      }
+      s.life--;
+    }
+    // 随机水花（更密集）
+    if (Math.random() < 0.25) {
+      const sx = Math.random() * w;
+      const parts = [];
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 3 + 1;
+        parts.push({ x: sx, y: h - 2, r: Math.random() * 2 + 1, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2 });
+      }
+      splashes.push({ parts, life: 25 });
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ════════════════════════ 状态 ════════════════════════ ════════════════════════
+let TOKEN = localStorage.getItem('auth_token') || '';
+let USER = null;
+let currentDomain = '';
+let emailDomain = '';
+let emailCertId = null;
+let allCerts = [];           // 缓存证书列表用于搜索
+let loginPwdMode = true;  // true=密码模式(默认), false=验证码模式
+let sendCooldown = 0;       // 发送冷却倒计时
+
+// ════════════════════════ Auth ════════════════════════
+function toggleLoginMode() {
+  loginPwdMode = !loginPwdMode;
+  document.getElementById('codeMode').style.display = loginPwdMode ? 'none' : 'block';
+  document.getElementById('pwdMode').style.display = loginPwdMode ? 'block' : 'none';
+  document.getElementById('toggleLink').textContent = loginPwdMode ? '📧 使用验证码登录' : '🔑 使用密码登录';
+  document.getElementById('authError').textContent = '';
+  document.getElementById('authError').style.display = 'none';
+  document.getElementById('btnLogin').textContent = loginPwdMode ? '密码登录' : '验证码登录';
+  document.getElementById('authCode').value = '';
+  document.getElementById('authPassword').value = '';
+}
+
+function sendCode() {
+  if (sendCooldown > 0) return;
+  const email = document.getElementById('authEmail').value.trim();
+  if (!email) { showError('请输入邮箱'); return; }
+  const btn = document.getElementById('btnSendCode');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  showError('');
+  fetch('api/auth/send_code', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({email})
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) {
+      showError(d.error);
+      btn.disabled = false;
+      btn.textContent = '重试';
+      // 如果是冷却提示，启动倒计时
+      if (d.error.includes('秒后重试')) {
+        let sec = parseInt(d.error.match(/\d+/)[0]) || 60;
+        sendCooldown = sec;
+        const tick = setInterval(()=>{
+          sendCooldown--;
+          btn.textContent = sendCooldown + 's';
+          if (sendCooldown <= 0) {
+            clearInterval(tick);
+            btn.disabled = false;
+            btn.textContent = '发送';
+          }
+        }, 1000);
+      }
+      return;
+    }
+    btn.textContent = '✅ 已发送';
+    if (d.debug_code) {
+      document.getElementById('authCode').value = d.debug_code;
+    }
+    setTimeout(()=>{ btn.disabled = false; btn.textContent = '发送'; }, 3000);
+  }).catch(e=>{
+    showError('发送失败: '+e.message);
+    btn.disabled = false;
+    btn.textContent = '发送';
+  });
+}
+
+function doLogin() {
+  const email = document.getElementById('authEmail').value.trim();
+  const btn = document.getElementById('btnLogin');
+  let body = {email};
+  if (loginPwdMode) {
+    const pwd = document.getElementById('authPassword').value.trim();
+    if (!pwd) { showError('请输入密码'); return; }
+    body.password = pwd;
+  } else {
+    const code = document.getElementById('authCode').value.trim();
+    if (!code) { showError('请输入验证码'); return; }
+    body.code = code;
+  }
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  fetch('api/auth/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { showError(d.error); btn.disabled = false; btn.textContent = loginPwdMode ? '密码登录' : '验证码登录'; return; }
+    TOKEN = d.token;
+    localStorage.setItem('auth_token', TOKEN);
+    USER = d.user;
+    document.getElementById('authCode').value = '';
+    document.getElementById('authPassword').value = '';
+    // 重新获取完整用户信息（包含额度）
+    fetch('api/auth/me', {headers:{'Authorization':'Bearer '+TOKEN}})
+      .then(r=>r.json()).then(d2=>{
+        if (d2.user) { USER = d2.user; enterApp(USER); }
+        else { enterApp(d.user); }
+      }).catch(()=>{ enterApp(d.user); });
+  }).catch(e=>{
+    showError('登录失败: '+e.message);
+    btn.disabled = false;
+    btn.textContent = loginPwdMode ? '密码登录' : '验证码登录';
+  });
+}
+
+function showError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function logout() {
+  TOKEN = '';
+  USER = null;
+  adminToken = null;
+  loginPwdMode = true;
+  sendCooldown = 0;
+  localStorage.removeItem('auth_token');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('authPage').style.display = 'flex';
+  document.getElementById('authError').textContent = '';
+  document.getElementById('authError').style.display = 'none';
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authCode').value = '';
+  document.getElementById('authPassword').value = '';
+  document.getElementById('btnSendCode').disabled = false;
+  document.getElementById('btnSendCode').textContent = '发送';
+  document.getElementById('btnLogin').disabled = false;
+  document.getElementById('btnLogin').textContent = '密码登录';
+  document.getElementById('codeMode').style.display = 'none';
+  document.getElementById('pwdMode').style.display = 'block';
+  document.getElementById('toggleLink').textContent = '📧 使用验证码登录';
+  const exitBtn = document.getElementById('exitSimBtn');
+  if (exitBtn) exitBtn.remove();
+  // 切换到仪表盘页
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-dashboard').classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('nav-dashboard').classList.add('active');
+}
+
+function setPassword() {
+  const p1 = document.getElementById('newPassword').value.trim();
+  const p2 = document.getElementById('confirmPassword').value.trim();
+  const err = document.getElementById('pwdSettingsError');
+  const ok = document.getElementById('pwdSettingsOk');
+  err.textContent = ''; ok.style.display = 'none';
+  if (!p1 || p1.length < 6) { err.textContent = '密码至少6位'; return; }
+  if (p1 !== p2) { err.textContent = '两次密码不一致'; return; }
+  fetch('api/auth/set_password', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({password:p1})
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { err.textContent = d.error; return; }
+    ok.style.display = 'block';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    setTimeout(()=>{ ok.style.display = 'none'; }, 3000);
+  }).catch(e=>{ err.textContent = '请求失败: '+e.message; });
+}
+
+// ════════════════════════ 进入应用 ════════════════════════
+function enterApp(user) {
+  document.getElementById('authPage').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  let quotaStr = '';
+  if (!user.is_admin && user.max_certs >= 0) {
+    const remaining = Math.max(0, user.max_certs - (user.cert_count||0));
+    quotaStr = '<br><span style="color:'+(remaining===0?'#fca5a5':'#4ade80')+';font-size:11px;">剩余额度: '+remaining+' / '+user.max_certs+'</span>';
+  } else if (user.is_admin) {
+    quotaStr = '<br><span style="color:#f59e0b;font-size:11px;">管理员 · 无限额</span>';
+  }
+  document.getElementById('userInfo').innerHTML = '<strong>'+user.email+'</strong>'+(user.is_admin?' 👑':'')+quotaStr;
+  document.getElementById('nav-admin').style.display = user.is_admin ? 'flex' : 'none';
+  refreshDashboard();
+}
+
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  if (name === 'dashboard') refreshDashboard();
+  if (name === 'newcert') resetAcmeFlow();
+  if (name === 'admin') refreshAdmin();
+}
+
+// ════════════════════════ 证书面板 ════════════════════════
+function refreshDashboard() {
+  fetch('api/certs', {headers:{'Authorization':'Bearer '+TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      renderStats(d.stats);
+      allCerts = d.certs || [];
+      renderCerts(allCerts);
+    }).catch(e=>console.error(e));
+}
+
+function filterCerts() {
+  const q = document.getElementById('certSearch').value.trim().toLowerCase();
+  const filtered = q ? allCerts.filter(c=>c.domain.toLowerCase().includes(q)) : allCerts;
+  renderCerts(filtered);
+  const count = document.getElementById('filterCount');
+  count.textContent = q && filtered.length !== allCerts.length ? '('+filtered.length+'/'+allCerts.length+')' : '';
+}
+
+function renderStats(stats) {
+  const el = document.getElementById('statsRow');
+  el.innerHTML = `
+    <div class="stat-card total"><div class="num">${stats.total||0}</div><div class="label">总计</div></div>
+    <div class="stat-card valid"><div class="num">${stats.valid||0}</div><div class="label">有效</div></div>
+    <div class="stat-card warning"><div class="num">${stats.expiring_soon||0}</div><div class="label">即将过期</div></div>
+    <div class="stat-card danger"><div class="num">${stats.expired||0}</div><div class="label">已过期</div></div>
+  `;
+}
+
+function deleteMyCert(cid, domain) {
+  if (!confirm('确定要删除证书 \n' + domain + ' 吗？\n\n删除后不可恢复，额度不返还。')) return;
+  fetch('api/certs/'+cid, {method:'DELETE',headers:{'Authorization':'Bearer '+TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      if (d.error) { alert(d.error); return; }
+      refreshDashboard();
+    }).catch(e=>{ alert('删除失败: '+e.message); });
+}
+
+function verifyCert(domain) {
+  const item = event.target;
+  item.disabled = true;
+  item.textContent = '查询中...';
+  // 先获取 DNS TXT 记录
+  fetch('api/acme/generate', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({domain: domain})
+  }).then(r=>r.json()).then(d=>{
+    const r = d.domains ? d.domains.find(x => x.domain === domain) : null;
+    if (r && r.status === 'completed') {
+      // 证书已签发，直接刷新面板
+      alert(domain + ' 证书已签发，无需重复验证');
+      item.disabled = false;
+      item.textContent = '🔍 验证';
+      refreshDashboard();
+      return;
+    }
+    if (!r || !r.txt_value) {
+      alert('未找到 DNS 记录信息');
+      item.disabled = false;
+      item.textContent = '🔍 验证';
+      return;
+    }
+    // 显示 DNS 记录弹窗
+    document.getElementById('dnsModalDomain').textContent = domain;
+    document.getElementById('dnsModalHost').querySelector('.dns-val').textContent = r.host_record;
+    document.getElementById('dnsModalHost').setAttribute('data-value', r.host_record);
+    document.getElementById('dnsModalValue').querySelector('.dns-val').textContent = r.txt_value;
+    document.getElementById('dnsModalValue').setAttribute('data-value', r.txt_value);
+    document.getElementById('dnsModalStatus').textContent = '';
+    const btnConfirm = document.getElementById('btnDnsConfirm');
+    btnConfirm.disabled = false;
+    btnConfirm.textContent = '✅ 开始验证';
+    btnConfirm.onclick = function() {
+      btnConfirm.disabled = true;
+      btnConfirm.textContent = '验证中...';
+      fetch('api/acme/verify', {
+        method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+        body: JSON.stringify({domain: domain})
+      }).then(r=>r.json()).then(d2=>{
+        document.getElementById('dnsModal').classList.remove('show');
+        if (d2.status === 'verifying') {
+          item.textContent = '⏳ 等DNS生效...';
+          pollCertStatus(domain, item);
+        } else if (d2.status === 'completed') {
+          item.textContent = '✅';
+          setTimeout(refreshDashboard, 1500);
+        } else {
+          alert('验证失败: ' + (d2.error || '未知错误'));
+          item.disabled = false;
+          item.textContent = '🔍 验证';
+        }
+      }).catch(e=>{
+        document.getElementById('dnsModal').classList.remove('show');
+        alert('请求失败: '+e.message);
+        item.disabled = false;
+        item.textContent = '🔍 验证';
+      });
+    };
+    document.getElementById('dnsModal').classList.add('show');
+    item.disabled = false;
+    item.textContent = '🔍 验证';
+  }).catch(e=>{
+    alert('获取DNS记录失败: '+e.message);
+    item.disabled = false;
+    item.textContent = '🔍 验证';
+  });
+}
+
+function closeDnsModal() {
+  document.getElementById('dnsModal').classList.remove('show');
+}
+
+async function pollCertStatus(domain, item) {
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const resp = await fetch('api/acme/status', {
+        method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+        body: JSON.stringify({domain: domain})
+      });
+      const d = await resp.json();
+      if (d.status === 'completed') {
+        item.textContent = '✅';
+        setTimeout(refreshDashboard, 1000);
+        return;
+      }
+      if (d.status === 'invalid' || d.status === 'error' || d.status === 'timeout') {
+        item.textContent = '❌ 重试';
+        item.disabled = false;
+        alert(domain + ' 验证失败: ' + (d.error || d.status));
+        return;
+      }
+      // still verifying
+      item.textContent = '⏳ ' + ((i+1)*3) + 's';
+    } catch(e) {}
+  }
+  item.textContent = '⏰ 超时';
+  item.disabled = false;
+}
+
+function renderCerts(certs) {
+  const el = document.getElementById('certList');
+  const empty = document.getElementById('emptyCerts');
+  if (!certs || certs.length === 0) {
+    el.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  el.innerHTML = certs.map(c => {
+    const statusLabel = {
+      'valid':'✅ 有效', 'expiring_soon':'⚠️ 即将过期', 'expired':'❌ 已过期',
+      'pending':'⏳ 处理中', 'invalid':'❌ 失败'
+    }[c.status] || c.status;
+    const days = c.days_remaining != null ? c.days_remaining+'天' : '--';
+    const cls = c.status === 'expiring_soon' ? 'expiring-soon' : (c.status === 'expired' ? 'expired' : '');
+    return `<div class="cert-item ${cls}">
+      <div class="cert-icon">${c.status === 'valid' ? '🔒' : (c.status === 'expiring_soon' ? '⚠️' : (c.status === 'pending'||c.status === 'verifying' ? '⏳' : '🔓'))}</div>
+      <div class="cert-info">
+        <div class="cert-domain">${c.domain}</div>
+        <div class="cert-meta">
+          <span class="cert-status status-${c.status}">${statusLabel}</span>
+          <span>🕒 剩 ${days}</span>
+          ${c.expires_at ? '<span>⏰ 到期 '+c.expires_at.slice(0,10)+'</span>' : ''}
+        </div>
+      </div>
+      <div class="cert-actions">
+        ${c.status === 'pending' || c.status === 'verifying' ? '<button class="btn btn-primary btn-sm" onclick="verifyCert(\''+c.domain+'\')">🔍 验证</button>' : ''}
+        <button class="btn btn-ghost btn-sm" onclick="showDetail(${c.id})">详情</button>
+        <button class="btn btn-sm" style="background:#7c3aed;color:white;" onclick="downloadCert(${c.id},'all')">📦</button>
+        <button class="btn btn-sm" style="background:rgba(220,38,38,0.7);color:white;backdrop-filter:blur(6px);" onclick="deleteMyCert(${c.id},'${c.domain}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════ 证书详情 ════════════════════════
+function showDetail(cid) {
+  fetch('api/certs/'+cid, {headers:{'Authorization':'Bearer '+TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      if (d.error) { alert(d.error); return; }
+      const cert = d.cert;
+      document.getElementById('modalTitle').textContent = cert.domain + ' 详情';
+      let statusEmoji = {'valid':'✅','expiring_soon':'⚠️','expired':'❌','pending':'⏳','invalid':'❌'}[cert.status] || '🔒';
+      document.getElementById('modalBody').innerHTML = `
+        <div style="margin-bottom:12px;">
+          <span class="cert-status status-${cert.status}">${statusEmoji} ${cert.status}</span>
+          ${cert.days_remaining != null ? '<span style="color:'+(cert.days_remaining<=7?'#f59e0b':'#64748b')+';margin-left:8px;">剩余 '+cert.days_remaining+' 天</span>' : ''}
+        </div>
+        <div class="detail-label">域名</div>
+        <div class="detail-value">${cert.domain}</div>
+        ${cert.issued_at ? '<div class="detail-label">签发时间</div><div class="detail-value">'+cert.issued_at+'</div>' : ''}
+        ${cert.expires_at ? '<div class="detail-label">到期时间</div><div class="detail-value">'+cert.expires_at+'<p style="text-align:right;margin-top:4px;"><span style="color:#f59e0b;font-size:12px;">到期前7天标红预警</span></p></div>' : ''}
+        ${d.files_exist ? `
+        <div style="display:flex;gap:6px;margin-top:12px;">
+          <button class="btn btn-primary btn-sm" onclick="downloadCert(${cert.id},'cert')">⬇ 下载证书</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadCert(${cert.id},'key')">⬇ 私钥</button>
+          <button class="btn btn-sm" style="background:#7c3aed;color:white;" onclick="downloadCert(${cert.id},'all')">📦 打包下载</button>
+        </div>
+        <div style="margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="openEmailModal(${cert.id},'${cert.domain}')">📧 发送到邮箱</button>
+        </div>
+        ` : '<div style="color:#64748b;font-size:13px;margin-top:8px;">证书文件未存储在服务器</div>'}
+      `;
+      document.getElementById('detailModal').classList.add('show');
+    }).catch(e=>{ console.error(e); alert('加载详情失败: '+e.message); });
+}
+
+function closeModal() {
+  document.getElementById('detailModal').classList.remove('show');
+}
+
+function downloadCert(cid, type) {
+  fetch('api/certs/'+cid+'/download/'+type, {
+    headers:{'Authorization':'Bearer '+TOKEN}
+  }).then(r=>r.blob()).then(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cert_' + cid + '_' + type + (type==='all'?'.zip':'.pem');
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }).catch(e=>{ alert('下载失败: '+e.message); });
+}
+
+function openEmailModal(cid, domain) {
+  emailCertId = cid; emailDomain = domain;
+  document.getElementById('emailInput').value = USER ? USER.email : '';
+  document.getElementById('emailModalStatus').textContent = '';
+  document.getElementById('emailModal').classList.add('show');
+}
+
+function closeEmailModal() {
+  document.getElementById('emailModal').classList.remove('show');
+  emailCertId = null;
+}
+
+function doSendEmail() {
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email) { document.getElementById('emailModalStatus').textContent = '请输入邮箱'; return; }
+  fetch('api/acme/email', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({domain: emailDomain, email})
+  }).then(r=>r.json()).then(d=>{
+    if (d.status === 'sent') { document.getElementById('emailModalStatus').textContent = '✅ '+d.message; setTimeout(closeEmailModal,1500); }
+    else { document.getElementById('emailModalStatus').textContent = '❌ '+(d.error||'发送失败'); }
+  }).catch(e=>{ document.getElementById('emailModalStatus').textContent = '❌ '+e.message; });
+}
+
+// ════════════════════════ ACME 签发 ════════════════════════
+let currentDomains = [];  // 批量域名列表
+let verifyIndex = 0;       // 当前验证到第几个
+
+function resetAcmeFlow() {
+  document.querySelectorAll('.acme-step').forEach(s=>s.classList.remove('active'));
+  document.getElementById('acmeStep1').classList.add('active');
+  document.getElementById('acmeDomain').value = '';
+  document.getElementById('acmeError').style.display = 'none';
+  document.getElementById('acmeVerifyStatus').innerHTML = '';
+  document.getElementById('btnGenerate').disabled = false;
+  document.getElementById('btnGenerate').textContent = '生成 DNS 验证记录';
+  currentDomains = [];
+}
+
+function acmeGenerate() {
+  const raw = document.getElementById('acmeDomain').value.trim();
+  if (!raw) {
+    document.getElementById('acmeError').textContent = '请输入域名';
+    document.getElementById('acmeError').style.display = 'block';
+    return;
+  }
+  document.getElementById('acmeError').style.display = 'none';
+  document.getElementById('btnGenerate').disabled = true;
+  document.getElementById('btnGenerate').innerHTML = '<span class="spinner"></span> 生成中...';
+  fetch('api/acme/generate', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({domain:raw})  // 后端自动按换行/逗号分割
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) {
+      document.getElementById('acmeError').textContent = '错误: '+d.error;
+      document.getElementById('acmeError').style.display = 'block';
+      document.getElementById('btnGenerate').disabled = false;
+      document.getElementById('btnGenerate').textContent = '重试';
+      return;
+    }
+    // 渲染所有域名的 DNS 记录
+    const list = d.domains || [];
+    currentDomains = list.filter(r => !r.error).map(r => r.domain);
+    verifyIndex = 0;
+    if (list.length === 0) {
+      document.getElementById('acmeError').textContent = '无有效域名';
+      document.getElementById('acmeError').style.display = 'block';
+      document.getElementById('btnGenerate').disabled = false;
+      document.getElementById('btnGenerate').textContent = '重试';
+      return;
+    }
+    let html = '<h3 style="margin-bottom:8px;font-size:15px;">📋 请去 DNS 控制台添加以下 <span style="color:#f59e0b;background:rgba(245,158,11,0.15);padding:2px 8px;border-radius:4px;">TXT 记录</span></h3>';
+    html += '<p style="color:#94a3b8;font-size:12px;margin-bottom:12px;">共 '+list.length+' 个域名，'+d.success+' 个已生成 · 添加后点击「开始验证」</p>';
+    list.forEach(r => {
+      if (r.error) {
+        html += '<div style="border:1px solid #dc2626;border-radius:6px;padding:10px;margin-bottom:8px;color:#fca5a5;"><b>'+r.domain+'</b>: '+r.error+'</div>';
+      } else {
+        html += '<div style="border:1px solid #334155;border-radius:6px;padding:10px;margin-bottom:8px;"><b style="color:#38bdf8;">'+r.domain+'</b>';
+        html += '<div style="display:flex;gap:8px;align-items:center;margin:6px 0;"><span style="color:#f59e0b;background:rgba(245,158,11,0.15);font-size:11px;padding:1px 8px;border-radius:3px;font-weight:600;">TXT</span><span style="color:#64748b;font-size:11px;">记录类型</span></div>';
+        html += '<div class="detail-label">主机记录</div><div class="detail-value" style="position:relative;" data-value="'+r.host_record+'">'+r.host_record+'<button class="copy-btn" onclick="copyText(this)">📋</button></div>';
+        html += '<div class="detail-label">记录值</div><div class="detail-value" style="position:relative;" data-value="'+r.txt_value+'">'+r.txt_value+'<button class="copy-btn" onclick="copyText(this)">📋</button></div>';
+        html += '</div>';
+      }
+    });
+    document.getElementById('acmeStep2').innerHTML = html + '<button class="btn btn-success btn-block" onclick="acmeVerify()" id="btnVerify" style="margin-top:12px;">✅ 我已添加全部DNS记录，开始验证</button><div id="acmeVerifyStatus" style="margin-top:12px;"></div>';
+    document.querySelectorAll('.acme-step').forEach(s=>s.classList.remove('active'));
+    document.getElementById('acmeStep2').classList.add('active');
+  }).catch(e=>{
+    document.getElementById('acmeError').textContent = '请求失败: '+e.message;
+    document.getElementById('acmeError').style.display = 'block';
+    document.getElementById('btnGenerate').disabled = false;
+    document.getElementById('btnGenerate').textContent = '重试';
+  });
+}
+
+function acmeVerify() {
+  if (currentDomains.length === 0) {
+    document.getElementById('acmeVerifyStatus').innerHTML = '<div style="color:#fca5a5;">没有待验证的域名</div>';
+    document.getElementById('btnVerify').disabled = false;
+    return;
+  }
+  verifyIndex = 0;
+  document.getElementById('btnVerify').disabled = true;
+  document.getElementById('acmeVerifyStatus').innerHTML = '';
+  acmeVerifyNext();
+}
+
+function acmeVerifyNext() {
+  if (verifyIndex >= currentDomains.length) {
+    // 全部验证完成
+    document.getElementById('acmeVerifyStatus').innerHTML = '<div style="color:#4ade80;font-size:15px;font-weight:600;margin-bottom:8px;">✅ 全部域名验证成功！</div>';
+    document.getElementById('btnVerify').disabled = false;
+    // 显示最后一个域名的证书
+    return;
+  }
+  const domain = currentDomains[verifyIndex];
+  const progress = '<div style="margin-bottom:8px;font-size:13px;color:#94a3b8;">验证进度: ' + verifyIndex + '/' + currentDomains.length + ' &nbsp;→ ' + domain + '</div>';
+  document.getElementById('acmeVerifyStatus').innerHTML = progress + '<div id="acmeVerifySingle"><span class="spinner"></span> 开始验证 ' + domain + '...</div>';
+  
+  fetch('api/acme/verify', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({domain: domain})
+  }).then(r=>r.json()).then(d=>{
+    if (d.status === 'completed') {
+      // 这个域名直接验证通过
+      acmeVerifyDone(domain, d);
+      return;
+    }
+    if (d.error) {
+      document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#fca5a5;">'+domain+': '+d.error+'</div>';
+      document.getElementById('btnVerify').disabled = false;
+      return;
+    }
+    acmePollSingle(domain);
+  }).catch(e=>{
+    document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#fca5a5;">请求失败: '+e.message+'</div>';
+    document.getElementById('btnVerify').disabled = false;
+  });
+}
+
+async function acmePollSingle(domain) {
+  let attempts = 0;
+  while (attempts < 60) {
+    await new Promise(r => setTimeout(r, 5000));
+    attempts++;
+    document.getElementById('acmeVerifySingle').innerHTML = '<span class="spinner"></span> 等待 ' + domain + ' DNS 生效... ('+(attempts*5)+'s)';
+    try {
+      const resp = await fetch('api/acme/status', {
+        method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+        body: JSON.stringify({domain: domain})
+      });
+      const d = await resp.json();
+      if (d.status === 'completed') {
+        acmeVerifyDone(domain, d);
+        return;
+      }
+      if (d.status === 'invalid') {
+        document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#fca5a5;">'+domain+' 验证失败: '+(d.error||'DNS记录未生效')+'</div>';
+        document.getElementById('acmeVerifyStatus').innerHTML += '<div style="color:#fca5a5;margin-top:4px;">❌ '+domain+' 验证失败，跳过</div>';
+        verifyIndex++;
+        acmeVerifyNext();
+        return;
+      }
+      if (d.status === 'error') {
+        document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#fca5a5;">'+domain+' 错误: '+(d.error||'服务异常')+'</div>';
+        document.getElementById('acmeVerifyStatus').innerHTML += '<div style="color:#fca5a5;margin-top:4px;">❌ '+domain+' 出错，跳过</div>';
+        verifyIndex++;
+        acmeVerifyNext();
+        return;
+      }
+      if (d.status === 'timeout') {
+        document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#f59e0b;">'+domain+' 超时</div>';
+        document.getElementById('acmeVerifyStatus').innerHTML += '<div style="color:#f59e0b;margin-top:4px;">⏳ '+domain+' 超时，跳过</div>';
+        verifyIndex++;
+        acmeVerifyNext();
+        return;
+      }
+    } catch(e) {}
+  }
+  document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#f59e0b;">'+domain+' 验证超时（5分钟）</div>';
+  document.getElementById('acmeVerifyStatus').innerHTML += '<div style="color:#f59e0b;margin-top:4px;">⏳ '+domain+' 超时，跳过</div>';
+  verifyIndex++;
+  acmeVerifyNext();
+}
+
+function acmeVerifyDone(domain, d) {
+  document.getElementById('acmeVerifySingle').innerHTML = '<div style="color:#4ade80;">✅ '+domain+' 验证成功！</div>';
+  document.getElementById('acmeVerifyStatus').innerHTML += '<div style="color:#4ade80;margin-top:4px;">✅ '+domain+' 已签发</div>';
+  verifyIndex++;
+  // 保存最后一个成功的证书，用于在 step3 展示
+  window._lastCert = d;
+  window._lastDomain = domain;
+  // 如果后面还有域名，继续验证
+  if (verifyIndex < currentDomains.length) {
+    acmeVerifyNext();
+  } else {
+    // 全部完成，展示最后一个证书
+    acmeShowCert(window._lastCert);
+  }
+}
+
+function acmeShowCert(d) {
+  document.getElementById('acmeDomainDisplay').textContent = '域名: '+(d.domain||window._lastDomain||'') + '（批量签发完成，共 '+currentDomains.length+' 个）';
+  currentDomain = d.domain || window._lastDomain || '';
+  document.getElementById('acmeCertPem').textContent = d.certificate || '未获取到';
+  document.getElementById('acmeKeyPem').textContent = d.private_key || '未获取到';
+  document.querySelectorAll('.acme-step').forEach(s=>s.classList.remove('active'));
+  document.getElementById('acmeStep3').classList.add('active');
+  document.getElementById('btnVerify').disabled = false;
+}
+
+function switchCertTab(tab) {
+  document.getElementById('tab-cert').style.display = tab==='cert' ? 'block' : 'none';
+  document.getElementById('tab-key').style.display = tab==='key' ? 'block' : 'none';
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='cert')||(i===1&&tab==='key')));
+}
+
+function copyText(btn) {
+  const d = btn.parentElement;
+  const text = (d.getAttribute('data-value') || d.childNodes[0].textContent || '').trim();
+  const origText = btn.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => { btn.textContent = origText; }, 2000);
+  }).catch(() => {});
+}
+
+function acmeDownload(type) {
+  fetch('api/acme/download/'+encodeURIComponent(currentDomain)+'/'+type, {
+    headers:{'Authorization':'Bearer '+TOKEN}
+  }).then(r=>r.blob()).then(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentDomain + '_' + type + (type==='all'?'.zip':'.pem');
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }).catch(e=>{ alert('下载失败: '+e.message); });
+}
+
+function acmeSendEmail() {
+  openEmailModal(null, currentDomain);
+}
+
+window.addEventListener('click', function(e) {
+  if (e.target.classList && e.target.classList.contains('modal-overlay')) e.target.classList.remove('show');
+});
+
+// ════════════════════════ 管理员 ════════════════════════
+function refreshAdmin() {
+  fetch('api/admin/users', {headers:{'Authorization':'Bearer '+TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      if (d.error) return;
+      renderAdminUsers(d.users);
+    });
+}
+
+function renderAdminUsers(users) {
+  if (!users || !users.length) {
+    document.getElementById('adminUsersTable').innerHTML = '<div class="empty-state"><div class="icon">👥</div><div class="desc">暂无用户</div></div>';
+    return;
+  }
+  let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<tr style="color:#64748b;border-bottom:1px solid rgba(148,163,184,0.1);"><th style="text-align:left;padding:8px;">邮箱</th><th style="text-align:center;padding:8px;">已用</th><th style="text-align:center;padding:8px;">总额度</th><th style="text-align:center;padding:8px;">剩余</th><th style="text-align:center;padding:8px;">设置额度</th><th style="text-align:center;padding:8px;">密码</th></tr>';
+  users.forEach(u => {
+    const isAdmin = u.is_admin ? ' 👑' : '';
+    const maxCerts = u.max_certs;
+    const certCount = u.total_issued || u.cert_count;
+    const remaining = maxCerts < 0 ? '∞' : Math.max(0, maxCerts - certCount);
+    const remainingColor = maxCerts < 0 ? '#4ade80' : (remaining === 0 ? '#fca5a5' : (remaining <= 1 ? '#fbbf24' : '#4ade80'));
+    const quotaDisplay = maxCerts < 0 ? '∞ 无限' : maxCerts + ' 张';
+    html += '<tr style="border-bottom:1px solid rgba(148,163,184,0.06);">';
+    html += '<td style="padding:10px 8px;">'+u.email+isAdmin+'</td>';
+    html += '<td style="text-align:center;padding:10px 8px;">'+certCount+'</td>';
+    html += '<td style="text-align:center;padding:10px 8px;">'+quotaDisplay+'</td>';
+    html += '<td style="text-align:center;padding:10px 8px;color:'+remainingColor+';font-weight:600;">'+remaining+'</td>';
+    if (u.is_admin) {
+      html += '<td style="text-align:center;color:#64748b;">—</td>';
+      html += '<td style="text-align:center;color:#64748b;">—</td>';
+    } else {
+      html += '<td style="text-align:center;padding:10px 8px;"><input type="number" id="quota_'+u.id+'" value="'+maxCerts+'" min="-1" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.12);color:#e2e8f0;padding:5px 8px;border-radius:4px;font-size:12px;width:70px;text-align:center;" title="-1=无限"> <button class="btn btn-primary btn-sm" onclick="setUserQuota('+u.id+')" style="padding:4px 10px;font-size:11px;">保存</button></td>';
+      html += '<td style="text-align:center;padding:10px 8px;"><input type="text" id="pwd_'+u.id+'" placeholder="新密码" style="background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:5px 8px;border-radius:4px;font-size:12px;width:90px;text-align:center;"> <button class="btn btn-sm" style="background:rgba(245,158,11,0.7);color:#000;padding:4px 10px;font-size:11px;" onclick="resetPassword('+u.id+')">重置</button> <button class="btn btn-sm" style="background:#dc2626;color:#fff;padding:4px 10px;font-size:11px;" onclick="deleteUser('+u.id+',\''+u.email+'\')">删除</button> <button class="btn btn-sm" style="background:#0284c7;color:#fff;padding:4px 10px;font-size:11px;" onclick="loginAs('+u.id+',\''+u.email+'\')">切换</button></td>';
+    }
+    html += '</tr>';
+  });
+  html += '</table></div>';
+  document.getElementById('adminUsersTable').innerHTML = html;
+}
+
+function setUserQuota(uid) {
+  const val = parseInt(document.getElementById('quota_'+uid).value);
+  if (isNaN(val) || val < -1) { alert('请输入 -1(无限) 或 0以上的整数'); return; }
+  fetch('api/admin/users/'+uid+'/quota', {
+    method:'PUT', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({max_certs:val})
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { alert(d.error); return; }
+    refreshAdmin();
+  });
+}
+
+function createUser() {
+  const email = document.getElementById('newUserEmail').value.trim();
+  const password = document.getElementById('newUserPassword').value.trim();
+  const quota = parseInt(document.getElementById('newUserQuota').value) || 5;
+  const msg = document.getElementById('createUserMsg');
+  if (!email || !password || password.length < 6) {
+    msg.textContent = '请填写完整信息（密码至少6位）';
+    return;
+  }
+  fetch('api/admin/create_user', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({email,password,max_certs:quota})
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { msg.textContent = d.error; return; }
+    msg.textContent = '';
+    msg.style.color = '#4ade80';
+    const pwd = d.password || password;
+    msg.innerHTML = '✅ 已创建 <b>'+d.user.email+'</b>（额度:'+(d.user.max_certs<0?'无限':d.user.max_certs)+'，密码:<b style="color:#fbbf24;">'+pwd+'</b>）';
+    setTimeout(()=>{ msg.textContent=''; msg.style.color=''; msg.innerHTML=''; }, 8000);
+    document.getElementById('newUserEmail').value = '';
+    document.getElementById('newUserPassword').value = '';
+    document.getElementById('newUserQuota').value = '5';
+    refreshAdmin();
+  }).catch(e=>{ msg.textContent = '请求失败: '+e.message; });
+}
+
+function resetPassword(uid) {
+  const pwd = document.getElementById('pwd_'+uid).value.trim();
+  if (!pwd || pwd.length < 6) { alert('新密码至少6位'); return; }
+  if (!confirm('确认将用户 #'+uid+' 的密码重置为: '+pwd+' 吗？')) return;
+  fetch('api/admin/users/'+uid+'/reset_password', {
+    method:'PUT', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},
+    body: JSON.stringify({password:pwd})
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { alert(d.error); return; }
+    alert('✅ 密码已重置为: ' + (d.password || pwd));
+    document.getElementById('pwd_'+uid).value = '';
+    refreshAdmin();
+  }).catch(e=>{ alert('请求失败: '+e.message); });
+}
+
+function deleteUser(uid, email) {
+  if (!confirm('⚠️ 确定要删除用户 ' + email + ' 吗？\n该用户的所有证书数据也会被删除。')) return;
+  fetch('api/admin/users/'+uid, {
+    method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { alert(d.error); return; }
+    alert('✅ 已删除用户: ' + d.email);
+    refreshAdmin();
+    refreshDashboard();
+  }).catch(e=>{ alert('请求失败: '+e.message); });
+}
+
+let adminToken = null;  // 保存管理员 token
+function loginAs(uid, email) {
+  if (!adminToken) adminToken = TOKEN;
+  fetch('api/admin/users/'+uid+'/login_as', {
+    method:'POST', headers:{'Authorization':'Bearer '+adminToken}
+  }).then(r=>r.json()).then(d=>{
+    if (d.error) { alert(d.error); return; }
+    TOKEN = d.token;
+    USER = d.user;
+    fetch('api/auth/me', {headers:{'Authorization':'Bearer '+TOKEN}})
+      .then(r=>r.json()).then(d2=>{
+        if (d2.user) USER = d2.user;
+        USER._simulated = email;
+        enterApp(USER);
+        let footer = document.querySelector('.sidebar-footer');
+        let exitBtn = document.getElementById('exitSimBtn');
+        if (!exitBtn) {
+          exitBtn = document.createElement('button');
+          exitBtn.id = 'exitSimBtn';
+          exitBtn.className = 'btn btn-sm';
+          exitBtn.style.cssText = 'width:100%;margin-bottom:4px;background:#f59e0b;color:#000;';
+          exitBtn.textContent = '🔙 退出模拟';
+          exitBtn.onclick = exitLoginAs;
+          footer.insertBefore(exitBtn, footer.firstChild);
+        }
+      });
+  }).catch(e=>{ alert('请求失败: '+e.message); });
+}
+
+function exitLoginAs() {
+  if (!adminToken) { logout(); return; }
+  TOKEN = adminToken;
+  adminToken = null;
+  fetch('api/auth/me', {headers:{'Authorization':'Bearer '+TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      USER = d.user || {email:'admin',is_admin:true};
+      let exitBtn = document.getElementById('exitSimBtn');
+      if (exitBtn) exitBtn.remove();
+      enterApp(USER);
+    });
+}
+
+// 立即执行鉴权检测（脚本在body末尾，DOM已就绪；在浏览器绘制前显示正确界面）
+(function initAuth() {
+  if (TOKEN) {
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('authPage').style.display = 'none';
+    fetch('api/auth/me', {headers:{'Authorization':'Bearer '+TOKEN}})
+      .then(r=>r.json()).then(d=>{
+        if (d.user) { USER = d.user; enterApp(d.user); }
+        else { TOKEN=''; localStorage.removeItem('auth_token'); showAuthPage(); }
+      }).catch(()=>{ TOKEN=''; localStorage.removeItem('auth_token'); showAuthPage(); });
+  } else {
+    showAuthPage();
+  }
+})();
+function showAuthPage() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('authPage').style.display = 'flex';
+}
+</script>
+</body>
+</html>
