@@ -1,0 +1,19 @@
+[Unit]
+Description=ACME SSL Certificate Manager Portal
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/acme-dns01/acme_portal.py 10501
+WorkingDirectory=/opt/acme-dns01
+Restart=always
+RestartSec=5
+
+Environment="SMTP_HOST=smtp.qq.com"
+Environment="SMTP_PORT=465"
+Environment="SMTP_USER=your_email@qq.com"
+Environment="SMTP_PASS=your_smtp_password"
+Environment="SMTP_FROM=your_email@qq.com"
+
+[Install]
+WantedBy=multi-user.target
