@@ -61,8 +61,9 @@ SEND_COOLDOWN = 60             # 两次发送间隔(秒)
 JWT_EXPIRE = 86400 * 7
 
 # 超级管理员配置
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "3065093357@qq.com")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "123xht..")
+# 管理员账号通过环境变量配置（例：ADMIN_EMAIL / ADMIN_PASSWORD）
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 DIRECTORY_URL = "https://acme-v02.api.letsencrypt.org/directory"
 STATE_ROOT = Path("state")
