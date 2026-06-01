@@ -1,0 +1,32 @@
+# 敏感数据
+state/*.pem
+state/*.db
+state/*.json
+state/*/
+state/*.*
+!state/.gitkeep
+
+# 环境变量
+.env
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+/tmp/
+*.tar.gz
+*.zip
