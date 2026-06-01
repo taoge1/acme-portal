@@ -7,7 +7,7 @@
 
 ## 一、项目起源与目标
 
-用户谢海涛需要一套 SSL 证书管理系统，能通过 Web 界面签发 Let's Encrypt 免费证书，支持多用户、额度控制、批量操作。
+用户项目维护者需要一套 SSL 证书管理系统，能通过 Web 界面签发 Let's Encrypt 免费证书，支持多用户、额度控制、批量操作。
 
 **核心需求**：
 - 用户注册/登录（邮箱+验证码+密码）
@@ -42,12 +42,12 @@ Flask acme_portal.py (端口 10501)
 
 | 项目 | 值 |
 |------|-----|
-| IP | 39.96.222.85 |
+| IP | your_server_ip |
 | 厂商 | 阿里云，华北2-北京 |
 | 系统 | Alibaba Cloud Linux 3 (≈CentOS 8) |
 | Python | 3.6.8 |
 | SSH 用户 | root |
-| SSH 密码 | 123xht.. |
+| SSH 密码 | your_password |
 | SSH 方式 | pty + select 交互式（无 sshpass/expect） |
 
 ## 四、文件结构
@@ -85,9 +85,9 @@ Flask acme_portal.py (端口 10501)
 ExecStart=/usr/bin/python3 /opt/acme-dns01/acme_portal.py 10501
 Environment="SMTP_HOST=smtp.qq.com"
 Environment="SMTP_PORT=465"
-Environment="SMTP_USER=xiexianshen@foxmail.com"
-Environment="SMTP_PASS=zpkvtpsovhbqdhdh"
-Environment="SMTP_FROM=xiexianshen@foxmail.com"
+Environment="SMTP_USER=your_smtp@example.com"
+Environment="SMTP_PASS=your_smtp_password"
+Environment="SMTP_FROM=your_smtp@example.com"
 ```
 
 ## 五、部署流程（重要！）
@@ -326,7 +326,7 @@ CREATE TABLE verify_codes (
 
 ## 十二、管理员功能
 
-- **管理员**：3065093357@qq.com / 123xht..
+- **管理员**：your_admin@example.com / your_password
 - 查看全部用户证书
 - 创建用户（邮箱+密码+额度）
 - 设置用户证书额度（-1=无限）
